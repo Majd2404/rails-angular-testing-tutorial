@@ -1,0 +1,19 @@
+# Rails
+rails-api/.bundle/
+rails-api/log/
+rails-api/tmp/
+rails-api/storage/
+rails-api/coverage/
+rails-api/db/*.sqlite3
+rails-api/public/assets
+
+# Angular
+angular-app/node_modules/
+angular-app/dist/
+angular-app/coverage/
+angular-app/.angular/
+
+# General
+.DS_Store
+*.env
+.env.local

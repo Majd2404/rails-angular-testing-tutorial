@@ -1,0 +1,84 @@
+# .gitlab-ci.yml
+# Equivalent CI pipeline for GitLab
+
+stages:
+  - test
+  - e2e
+
+variables:
+  RAILS_ENV: test
+  NODE_VERSION: "20"
+
+# ─── RSpec Tests ─────────────────────────────────────────────────────────────
+rspec:
+  stage: test
+  image: ruby:3.2
+  before_script:
+    - cd rails-api
+    - gem install bundler
+    - bundle install --jobs 4
+    - bundle exec rails db:create db:migrate
+  script:
+    - bundle exec rspec spec/models spec/requests --format progress
+  coverage: '/\(\d+.\d+\%\) covered/'
+  artifacts:
+    when: always
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: rails-api/coverage/coverage.xml
+    paths:
+      - rails-api/coverage/
+
+# ─── Jest Tests ────────────────────────────────────────────────────────────
+jest:
+  stage: test
+  image: node:20-alpine
+  before_script:
+    - cd angular-app
+    - npm ci
+  script:
+    - npm run test:coverage
+  coverage: '/Lines\s*:\s*(\d+.\d+)%/'
+  artifacts:
+    when: always
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: angular-app/coverage/cobertura-coverage.xml
+    paths:
+      - angular-app/coverage/
+
+# ─── Selenium E2E ────────────────────────────────────────────────────────────
+selenium:
+  stage: e2e
+  image: ruby:3.2
+  needs: [rspec, jest]
+  services:
+    - name: selenium/standalone-chrome:latest
+      alias: selenium
+  variables:
+    SELENIUM_REMOTE_URL: "http://selenium:4444/wd/hub"
+  before_script:
+    # Rails setup
+    - cd rails-api
+    - gem install bundler && bundle install
+    - bundle exec rails db:create db:migrate
+    # Node/Angular setup
+    - curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+    - apt-get install -y nodejs
+    - cd ../angular-app && npm ci && npm run build
+    # Serve Angular
+    - npx serve -s dist/angular-app -l 4200 &
+    - cd ../rails-api
+    - bundle exec rails server -e test -p 3000 &
+    - sleep 5
+  script:
+    - bundle exec rspec spec/features --format documentation
+  artifacts:
+    when: on_failure
+    paths:
+      - rails-api/tmp/screenshots/
+  only:
+    - main
+    - merge_requests
